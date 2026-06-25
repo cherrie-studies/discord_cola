@@ -122,7 +122,7 @@ async def on_message(message: discord.Message):
         ),
     }
     _append_to_inbox(entry)
-    print(f"[discord_cola] ← {message.author.display_name}: {message.content[:80]}")
+    print(f"[discord_cola] <- {message.author.display_name}: {message.content[:80]}")
 
 
 # ── Outbox: Cola → Discord ─────────────────────────────────────────────────
@@ -199,7 +199,7 @@ async def _process_outbox_file(filepath: Path) -> bool:
 
         sent_msg = await channel.send(**kwargs)
         label = str(content)[:60] if content else f"[{len(discord_files)} file(s)]"
-        print(f"[discord_cola] → #{getattr(channel, 'name', channel_id)}: {label}")
+        print(f"[discord_cola] -> #{getattr(channel, 'name', channel_id)}: {label}")
         _archive(filepath, success=True, sent_message_id=sent_msg.id)
         return True
 
