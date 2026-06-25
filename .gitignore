@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.venv/
+venv/
+
+# Inbox/outbox runtime data (don't commit message history)
+inbox/messages.jsonl
+outbox/*.json
+!outbox/sent/
+outbox/sent/
+
+# OS
+.DS_Store
+Thumbs.db
