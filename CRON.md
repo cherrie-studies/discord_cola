@@ -4,9 +4,9 @@ This file tells ColaOS how to create the cron job that reads Discord messages an
 
 ## What the cron does
 
-1. Checks `inbox/messages.jsonl` for new messages (cursor-based, no duplicates)
+1. Checks `inbox/messages.jsonl` for new messages via `read_inbox.py has_pending`
 2. If none → exits immediately (no reasoning, no cost)
-3. If new messages → reads them, thinks, writes replies to `outbox/`
+3. If new messages → reads slim JSON (only essential fields), thinks, writes replies to `outbox/`
 4. Updates `inbox/cursor.txt` so messages aren't re-processed
 
 ## How to create it
@@ -25,35 +25,33 @@ Ask Cola to create a cron with these exact parameters:
 **Prompt:**
 
 ```
-You are Cola's Discord inbox processor. This cron runs every 10 seconds to check for new Discord messages from Cherrie and respond.
+You are Cola's Discord inbox processor. Runs every 10s.
 
-## CRITICAL: Quick exit path — do this FIRST
+## Quick exit (do FIRST)
 Run: `python C:/PERSONAL_DATA/Coding/discord_cola/read_inbox.py has_pending`
+Exit 0 = pending, exit non-zero = nothing → exit silently NOW. No output, no thinking.
 
-- If exit code is non-zero → no pending messages. Exit silently NOW. Do NOT output anything, do NOT reason, do NOT read memory bank.
-- If exit code is 0 → there ARE pending messages. Continue to the next step.
+## Process messages (exit 0 only)
+1. `python C:/PERSONAL_DATA/Coding/discord_cola/read_inbox.py slim` → minimal JSON per message:
+   message_id, channel_id, author_display_name, content,
+   attachments (filename+local_path only), referenced_message_id.
 
-## Processing new messages
-1. Run: `python C:/PERSONAL_DATA/Coding/discord_cola/read_inbox.py read`
-   Returns a JSON array of new messages. Each has: message_id, channel_id, channel_name, guild_name, author_id, author_name, author_display_name, content, timestamp, attachments (with local_path for downloaded files), referenced_message_id.
+2. These are Cherrie messaging from Discord (AFK). Use memory bank at
+   C:\Users\Cherrie\.cola\memory-bank\. Respond in their language, concise
+   (<1800 chars), split to multiple outbox files if needed.
 
-2. These messages are from Cherrie (the Discord user). They are messaging you because they are AFK. Respond in their language as you normally would. Use their memory bank at C:\Users\Cherrie\.cola\memory-bank\ for context.
-
-3. For each message, write a response to:
+3. Write response:
    File: C:/PERSONAL_DATA/Coding/discord_cola/outbox/{datetime}_{msg_id}.json
-   Content: {"channel_id": <channel_id>, "content": "<your reply, max 1800 chars>", "reply_to_message_id": <message_id>}
-   The bot scans outbox/ every 1s and sends to Discord.
+   Content: {"channel_id": <id>, "content": "<reply>", "reply_to_message_id": <msg_id>}
 
-4. After each processed message: `python C:/PERSONAL_DATA/Coding/discord_cola/read_inbox.py mark <message_id>`
+4. Mark done: `python C:/PERSONAL_DATA/Coding/discord_cola/read_inbox.py mark <message_id>`
 
-5. After ALL messages: update MEMORY.md active context at C:\Users\Cherrie\.cola\memory-bank\ if anything was discussed, and create/update note files for any new facts or tasks.
+5. Update memory bank for anything important learned.
 
 ## Rules
-- Only respond to messages from Cherrie (their Discord username). Skip messages from other users.
-- If you're unsure who Cherrie is on Discord, process all messages but note the uncertainty.
-- Keep replies concise — they're on mobile. Under 1800 chars. Split into multiple outbox files if needed.
-- If they shared files, read them from the local_path in attachments.
-- Update memory bank for anything important learned (preferences, tasks, facts).
+- Only respond to Cherrie. Skip other users.
+- Read files from local_path in attachments if shared.
+- Keep replies under 1800 chars.
 ```
 
 ---
