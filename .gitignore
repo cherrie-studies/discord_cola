@@ -10,6 +10,8 @@ dist/
 venv/
 
 # Inbox/outbox runtime data (don't commit message history)
+inbox/messages.jsonl
+inbox/cursor.txt
 inbox/*/
 inbox/attachments/
 outbox/*.json

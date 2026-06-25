@@ -2,47 +2,54 @@
 
 Push-based Discord ↔ Cola message bridge using Discord's gateway (WebSocket). No polling.
 
-## How it works
+## Architecture
 
 ```
 Discord Gateway (push)
        │
        ▼
-   ┌───────┐     inbox/messages.jsonl     ┌──────────┐
-   │ bot.py │ ──────────────────────────► │ Cola cron │
-   └───────┘                              └──────────┘
-       ▲                                       │
-       │       outbox/*.json (reply files)     │
-       └───────────────────────────────────────┘
+   ┌────────┐     inbox/<group>/messages.jsonl     ┌──────────────┐
+   │ bot.py │ ──────────────────────────────────►  │ ColaOS cron   │
+   └────────┘                                      │ (every 10s)   │
+       ▲                                           └──────────────┘
+       │                                                  │
+       │     outbox/*.json (written by reply command)     │
+       └──────────────────────────────────────────────────┘
 ```
 
-- **Inbound:** Bot listens via Discord gateway. Messages in allowed channels are appended as JSON lines to `inbox/messages.jsonl`. Attachments are auto-downloaded to `inbox/attachments/<msg_id>/`.
-- **Outbound:** Cola drops `.json` reply files into `outbox/`. The bot scans every second, sends them (text + optional file attachments) via the Discord API, and archives to `outbox/sent/`.
+- **bot.py** — Connects to Discord gateway. Listens for messages in configured channels, writes them to group-isolated inbox files, auto-downloads attachments. Scans `outbox/` every 1s and sends replies. Shows 🟢 online presence + typing indicator.
+- **read_inbox.py** — CLI helper for the ColaOS cron. Commands: `has_pending`, `slim`, `reply`, `mark`. Handles routing so the cron never sees Discord IDs.
+- **ColaOS cron** — Runs every 10s. Sees only `content` + `attachments`. Thinks, then calls `reply` to send responses. See [CRON.md](CRON.md).
 
 ## Setup
 
 ### 1. Create a Discord Bot
 
 1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. New Application → name it `Cola Bridge` (or anything)
+2. New Application → name it
 3. **Bot** tab → Reset Token → copy it
-4. Enable these **Privileged Gateway Intents:**
-   - Message Content Intent **(required)**
-5. **OAuth2 → URL Generator** → select `bot` scope + `Send Messages` + `Read Message History` → use the generated URL to invite the bot to your server
+4. Enable **Message Content Intent** under Privileged Gateway Intents
+5. **OAuth2 → URL Generator** → `bot` + `Send Messages` + `Read Message History` → invite to server
 
-### 2. Configure the bridge
+### 2. Configure
 
 ```bash
 cp .env.example .env
-# Edit .env and fill in your token + channel IDs
 ```
 
 ```
-DISCORD_TOKEN=your_bot_token_here
+DISCORD_TOKEN=your_token
 ALLOWED_CHANNEL_IDS=123456789,987654321
 ```
 
-Leave `ALLOWED_CHANNEL_IDS` empty to listen to **all** channels the bot can see.
+Optional — isolate or share channel histories:
+
+```
+SHARE_HISTORY_1=123456789,987654321   # these two channels share one conversation
+SHARE_HISTORY_2=111222333             # this channel is isolated
+```
+
+Channels not listed in any `SHARE_HISTORY` each get their own isolated inbox automatically.
 
 ### 3. Run the bot
 
@@ -53,58 +60,85 @@ python bot.py
 
 Or double-click `run_bot.bat` (activates venv automatically).
 
-### 4. Set up the Cola cron
+### 4. Set up the ColaOS cron
 
-See [CRON.md](CRON.md) for instructions. The cron is what makes Cola read and respond to Discord messages. Without it, the bot just logs messages to disk.
+See [CRON.md](CRON.md). Without the cron, the bot just logs messages to disk.
 
-## Outbox format (Cola → Discord)
+## How the cron sees messages
 
-Drop a `.json` file into `outbox/`:
+The cron input is **intentionally minimal** — Cola doesn't need Discord IDs:
+
+```json
+[
+  {
+    "group": "history_1",
+    "id": 456,
+    "content": "Hey Cola, what's up?",
+    "attachments": [
+      {"filename": "img.png", "local_path": "C:/.../inbox/attachments/456/img.png"}
+    ]
+  }
+]
+```
+
+Routing (`channel_id`, reply threading) is handled by `read_inbox.py reply`.
+
+## Inbox storage (on disk)
+
+Full message data is stored in group-isolated JSONL files for debugging:
+
+```
+inbox/
+├── history_1/messages.jsonl    ← channels in SHARE_HISTORY_1
+├── history_2/messages.jsonl    ← channels in SHARE_HISTORY_2
+├── ch_999888777/messages.jsonl ← auto-isolated channel
+└── attachments/<msg_id>/       ← downloaded files
+```
+
+Each line in a `messages.jsonl`:
+
+```json
+{
+  "message_id": 123456789,
+  "channel_id": 987654321,
+  "channel_name": "general",
+  "guild_id": 111,
+  "guild_name": "My Server",
+  "author_id": 222,
+  "author_name": "User#1234",
+  "author_display_name": "Cherrie",
+  "content": "Hey Cola!",
+  "timestamp": "2026-06-25T14:30:00+00:00",
+  "received_at": "2026-06-25T14:30:01+00:00",
+  "attachments": [
+    {
+      "filename": "img.png",
+      "url": "https://cdn.discord.com/...",
+      "size": 12345,
+      "local_path": "C:/.../inbox/attachments/123456789/img.png"
+    }
+  ],
+  "referenced_message_id": null
+}
+```
+
+## Outbox format
+
+Normally handled by `read_inbox.py reply`. For manual use:
 
 ```json
 {
     "channel_id": 123456789,
-    "content": "Hello from Cola!",
+    "content": "Hello!",
     "reply_to_message_id": null,
-    "files": ["C:/path/to/image.png", "C:/path/to/report.pdf"]
+    "files": ["C:/path/to/image.png"]
 }
 ```
 
 - `channel_id` — Discord channel ID (required)
-- `content` — Message text, max 2000 chars (optional if `files` is provided)
+- `content` — Message text, max 2000 chars (optional if `files` provided)
 - `reply_to_message_id` — Optional, replies to a specific message
-- `files` — Optional array of absolute local file paths to attach (images, PDFs, etc.)
-
-The file is deleted after sending (archived to `outbox/sent/`).
-
-## Inbox format (Discord → Cola)
-
-Each line in `inbox/messages.jsonl`:
-
-```json
-{
-    "message_id": 123456789,
-    "channel_id": 987654321,
-    "channel_name": "general",
-    "guild_id": 111,
-    "guild_name": "My Server",
-    "author_id": 222,
-    "author_name": "User#1234",
-    "author_display_name": "User",
-    "content": "Hey Cola, what's up?",
-    "timestamp": "2026-06-25T14:30:00+00:00",
-    "received_at": "2026-06-25T14:30:01.123456+00:00",
-    "attachments": [
-        {
-            "filename": "img.png",
-            "url": "https://cdn.discord.com/...",
-            "size": 12345,
-            "local_path": "C:/.../inbox/attachments/123456789/img.png"
-        }
-    ],
-    "referenced_message_id": null
-}
-```
+- `files` — Optional array of local file paths to attach
 
 ## License
 
