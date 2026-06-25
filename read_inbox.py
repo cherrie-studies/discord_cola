@@ -31,7 +31,8 @@ def main():
         # Read inbox, collect new messages
         new_messages = []
         if INBOX_FILE.exists():
-            for line in INBOX_FILE.read_text(encoding="utf-8").splitlines():
+            raw = INBOX_FILE.read_text(encoding="utf-8-sig")  # utf-8-sig strips BOM
+            for line in raw.splitlines():
                 line = line.strip()
                 if not line:
                     continue
@@ -62,7 +63,8 @@ def main():
         if not INBOX_FILE.exists():
             sys.exit(1)  # No inbox yet
 
-        for line in INBOX_FILE.read_text(encoding="utf-8").splitlines():
+        raw = INBOX_FILE.read_text(encoding="utf-8-sig")
+        for line in raw.splitlines():
             line = line.strip()
             if not line:
                 continue
