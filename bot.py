@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 # ── Paths ──────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent
-INBOX_FILE = BASE_DIR / "inbox" / "messages.jsonl"
+INBOX_DIR = BASE_DIR / "inbox"
 ATTACHMENTS_DIR = BASE_DIR / "inbox" / "attachments"
 OUTBOX_DIR = BASE_DIR / "outbox"
 SENT_DIR = OUTBOX_DIR / "sent"
@@ -44,6 +44,36 @@ if _raw:
         if part:
             ALLOWED_CHANNEL_IDS.add(int(part))
 
+# History groups — which channels share inbox/cursor
+# SHARE_HISTORY_1=111,222  → share inbox/history_1/
+# Channels not in any group get their own: inbox/ch_<id>/
+def _build_group_map() -> dict[int, str]:
+    groups: dict[int, str] = {}
+    for key, val in os.environ.items():
+        if key.startswith("SHARE_HISTORY_"):
+            group = key[len("SHARE_HISTORY_"):]
+            for cid in val.split(","):
+                cid = cid.strip()
+                if cid:
+                    groups[int(cid)] = f"history_{group}"
+    return groups
+
+GROUP_MAP = _build_group_map()
+
+
+def _group_for_channel(channel_id: int) -> str:
+    if channel_id in GROUP_MAP:
+        return GROUP_MAP[channel_id]
+    return f"ch_{channel_id}"
+
+
+def _inbox_file(channel_id: int) -> Path:
+    """Inbox file for a channel, respecting history groups."""
+    group = _group_for_channel(channel_id)
+    d = INBOX_DIR / group
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "messages.jsonl"
+
 
 # ── Discord client ─────────────────────────────────────────────────────────
 intents = discord.Intents.default()
@@ -55,11 +85,11 @@ client = discord.Client(intents=intents)
 
 
 # ── Inbox: Discord → Cola ──────────────────────────────────────────────────
-def _append_to_inbox(entry: dict) -> None:
-    """Atomically append a JSON line to the inbox file."""
-    INBOX_FILE.parent.mkdir(parents=True, exist_ok=True)
+def _append_to_inbox(channel_id: int, entry: dict) -> None:
+    """Atomically append a JSON line to the channel's inbox file."""
+    inf = _inbox_file(channel_id)
     line = json.dumps(entry, ensure_ascii=False) + "\n"
-    with open(INBOX_FILE, "a", encoding="utf-8") as f:
+    with open(inf, "a", encoding="utf-8") as f:
         f.write(line)
         f.flush()
         os.fsync(f.fileno())
@@ -126,7 +156,7 @@ async def on_message(message: discord.Message):
             message.reference.message_id if message.reference else None
         ),
     }
-    _append_to_inbox(entry)
+    _append_to_inbox(message.channel.id, entry)
     print(f"[discord_cola] <- {message.author.display_name}: {message.content[:80]}")
 
 
