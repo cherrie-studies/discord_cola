@@ -5,8 +5,10 @@ Push-based Discord gateway client that bridges messages between Discord and Cola
 
 Inbound  (Discord → Cola):  Listens to configured channels via Discord gateway.
                              Writes incoming messages as JSONL to inbox/messages.jsonl.
+                             Downloads attachments to inbox/attachments/<msg_id>/.
 Outbound (Cola → Discord):  Watches outbox/ for .json reply files, sends them via the
-                             Discord API, then archives to outbox/sent/.
+                             Discord API (text + optional file attachments),
+                             then archives to outbox/sent/.
 """
 
 import asyncio
@@ -25,6 +27,7 @@ from dotenv import load_dotenv
 # ── Paths ──────────────────────────────────────────────────────────────────
 BASE_DIR = Path(__file__).resolve().parent
 INBOX_FILE = BASE_DIR / "inbox" / "messages.jsonl"
+ATTACHMENTS_DIR = BASE_DIR / "inbox" / "attachments"
 OUTBOX_DIR = BASE_DIR / "outbox"
 SENT_DIR = OUTBOX_DIR / "sent"
 
@@ -82,6 +85,25 @@ async def on_message(message: discord.Message):
     if ALLOWED_CHANNEL_IDS and message.channel.id not in ALLOWED_CHANNEL_IDS:
         return
 
+    # Download attachments
+    attachment_entries = []
+    for a in message.attachments:
+        local_dir = ATTACHMENTS_DIR / str(message.id)
+        local_dir.mkdir(parents=True, exist_ok=True)
+        local_path = local_dir / a.filename
+        try:
+            await a.save(local_path)
+            print(f"[discord_cola]  ↓ saved {a.filename} ({a.size} bytes)")
+        except (discord.HTTPException, OSError) as e:
+            print(f"[discord_cola]  ⚠ failed to download {a.filename}: {e}")
+            local_path = None
+        attachment_entries.append({
+            "filename": a.filename,
+            "url": a.url,
+            "size": a.size,
+            "local_path": str(local_path) if local_path else None,
+        })
+
     entry = {
         "message_id": message.id,
         "channel_id": message.channel.id,
@@ -94,10 +116,7 @@ async def on_message(message: discord.Message):
         "content": message.content,
         "timestamp": message.created_at.isoformat(),
         "received_at": datetime.now(timezone.utc).isoformat(),
-        "attachments": [
-            {"filename": a.filename, "url": a.url, "size": a.size}
-            for a in message.attachments
-        ],
+        "attachments": attachment_entries,
         "referenced_message_id": (
             message.reference.message_id if message.reference else None
         ),
@@ -132,9 +151,15 @@ async def _process_outbox_file(filepath: Path) -> bool:
     channel_id = data.get("channel_id")
     content = data.get("content", "")
     reply_to = data.get("reply_to_message_id")
+    file_paths = data.get("files", [])  # Optional list of local file paths to attach
 
-    if not channel_id or not content:
-        print(f"[discord_cola] ⚠ Outbox entry missing channel_id or content: {filepath.name}")
+    if not channel_id:
+        print(f"[discord_cola] ⚠ Outbox entry missing channel_id: {filepath.name}")
+        _archive(filepath, success=False)
+        return False
+
+    if not content and not file_paths:
+        print(f"[discord_cola] ⚠ Outbox entry has no content or files: {filepath.name}")
         _archive(filepath, success=False)
         return False
 
@@ -148,7 +173,9 @@ async def _process_outbox_file(filepath: Path) -> bool:
             return False
 
     try:
-        kwargs = {"content": str(content)[:2000]}  # Discord 2000-char limit
+        kwargs: dict = {}
+        if content:
+            kwargs["content"] = str(content)[:2000]  # Discord 2000-char limit
         if reply_to:
             try:
                 ref_msg = await channel.fetch_message(int(reply_to))
@@ -156,8 +183,23 @@ async def _process_outbox_file(filepath: Path) -> bool:
             except (discord.NotFound, discord.HTTPException):
                 pass  # Send without reply if referenced message is gone
 
+        # Attach files if specified
+        discord_files: list[discord.File] = []
+        for fp in file_paths:
+            p = Path(fp)
+            if p.exists() and p.is_file():
+                try:
+                    discord_files.append(discord.File(str(p)))
+                except OSError as e:
+                    print(f"[discord_cola] ⚠ Cannot attach {p.name}: {e}")
+            else:
+                print(f"[discord_cola] ⚠ File not found: {fp}")
+        if discord_files:
+            kwargs["files"] = discord_files
+
         sent_msg = await channel.send(**kwargs)
-        print(f"[discord_cola] → #{getattr(channel, 'name', channel_id)}: {str(content)[:80]}")
+        label = str(content)[:60] if content else f"[{len(discord_files)} file(s)]"
+        print(f"[discord_cola] → #{getattr(channel, 'name', channel_id)}: {label}")
         _archive(filepath, success=True, sent_message_id=sent_msg.id)
         return True
 

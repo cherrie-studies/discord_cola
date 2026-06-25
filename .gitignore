@@ -11,6 +11,7 @@ venv/
 
 # Inbox/outbox runtime data (don't commit message history)
 inbox/messages.jsonl
+inbox/attachments/
 outbox/*.json
 !outbox/sent/
 outbox/sent/

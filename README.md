@@ -16,8 +16,8 @@ Discord Gateway (push)
        └───────────────────────────────────────┘
 ```
 
-- **Inbound:** Bot listens via Discord gateway. Messages in allowed channels are appended as JSON lines to `inbox/messages.jsonl`.
-- **Outbound:** Cola drops `.json` reply files into `outbox/`. The bot scans every second, sends them via the Discord API, and archives to `outbox/sent/`.
+- **Inbound:** Bot listens via Discord gateway. Messages in allowed channels are appended as JSON lines to `inbox/messages.jsonl`. Attachments are auto-downloaded to `inbox/attachments/<msg_id>/`.
+- **Outbound:** Cola drops `.json` reply files into `outbox/`. The bot scans every second, sends them (text + optional file attachments) via the Discord API, and archives to `outbox/sent/`.
 
 ## Setup
 
@@ -59,13 +59,15 @@ Drop a `.json` file into `outbox/`:
 {
     "channel_id": 123456789,
     "content": "Hello from Cola!",
-    "reply_to_message_id": null
+    "reply_to_message_id": null,
+    "files": ["C:/path/to/image.png", "C:/path/to/report.pdf"]
 }
 ```
 
 - `channel_id` — Discord channel ID (required)
-- `content` — Message text, max 2000 chars (required)
+- `content` — Message text, max 2000 chars (optional if `files` is provided)
 - `reply_to_message_id` — Optional, replies to a specific message
+- `files` — Optional array of absolute local file paths to attach (images, PDFs, etc.)
 
 The file is deleted after sending (archived to `outbox/sent/`).
 
@@ -86,7 +88,14 @@ Each line in `inbox/messages.jsonl`:
     "content": "Hey Cola, what's up?",
     "timestamp": "2026-06-25T14:30:00+00:00",
     "received_at": "2026-06-25T14:30:01.123456+00:00",
-    "attachments": [{"filename": "img.png", "url": "https://...", "size": 12345}],
+    "attachments": [
+        {
+            "filename": "img.png",
+            "url": "https://cdn.discord.com/...",
+            "size": 12345,
+            "local_path": "C:/.../inbox/attachments/123456789/img.png"
+        }
+    ],
     "referenced_message_id": null
 }
 ```
