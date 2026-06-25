@@ -68,6 +68,11 @@ def _append_to_inbox(entry: dict) -> None:
 @client.event
 async def on_ready():
     print(f"[discord_cola] Logged in as {client.user} (ID: {client.user.id})")
+    # Set online status
+    await client.change_presence(
+        status=discord.Status.online,
+        activity=discord.Activity(type=discord.ActivityType.listening, name="for your messages")
+    )
     if not ALLOWED_CHANNEL_IDS:
         print("[discord_cola] WARNING: No ALLOWED_CHANNEL_IDS set — listening to ALL channels!")
     else:
@@ -142,7 +147,7 @@ async def _process_outbox_file(filepath: Path) -> bool:
     """Read a single outbox .json, send the message, move to sent/.
     Returns True on success."""
     try:
-        data = json.loads(filepath.read_text(encoding="utf-8"))
+        data = json.loads(filepath.read_text(encoding="utf-8-sig"))
     except (json.JSONDecodeError, OSError) as e:
         print(f"[discord_cola] ⚠ Bad outbox file {filepath.name}: {e}")
         _archive(filepath, success=False)
@@ -197,7 +202,9 @@ async def _process_outbox_file(filepath: Path) -> bool:
         if discord_files:
             kwargs["files"] = discord_files
 
-        sent_msg = await channel.send(**kwargs)
+        # Show typing indicator while sending
+        async with channel.typing():
+            sent_msg = await channel.send(**kwargs)
         label = str(content)[:60] if content else f"[{len(discord_files)} file(s)]"
         print(f"[discord_cola] -> #{getattr(channel, 'name', channel_id)}: {label}")
         _archive(filepath, success=True, sent_message_id=sent_msg.id)
