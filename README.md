@@ -44,12 +44,18 @@ ALLOWED_CHANNEL_IDS=123456789,987654321
 
 Leave `ALLOWED_CHANNEL_IDS` empty to listen to **all** channels the bot can see.
 
-### 3. Run
+### 3. Run the bot
 
 ```bash
 pip install -r requirements.txt
 python bot.py
 ```
+
+Or double-click `run_bot.bat` (activates venv automatically).
+
+### 4. Set up the Cola cron
+
+See [CRON.md](CRON.md) for instructions. The cron is what makes Cola read and respond to Discord messages. Without it, the bot just logs messages to disk.
 
 ## Outbox format (Cola → Discord)
 
