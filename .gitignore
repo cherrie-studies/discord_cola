@@ -18,6 +18,9 @@ outbox/*.json
 !outbox/sent/
 outbox/sent/
 
+# Plugin test build artifacts
+test/
+
 # OS
 .DS_Store
 Thumbs.db
