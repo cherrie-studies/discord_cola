@@ -1,25 +1,19 @@
 # Secrets
 .env
 
-# Python
+# Python (legacy)
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
 .venv/
-venv/
 
-# Inbox/outbox runtime data (don't commit message history)
-inbox/messages.jsonl
-inbox/cursor.txt
-inbox/*/
-inbox/attachments/
-outbox/*.json
-!outbox/sent/
-outbox/sent/
+# Build artifacts
+plugin/dist/
+plugin/node_modules/
 
-# Plugin test build artifacts
-test/
+# Runtime data
+*.jsonl
+channels/
 
 # OS
 .DS_Store

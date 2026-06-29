@@ -1,0 +1,31 @@
+{
+  "name": "cola-plugin-discord",
+  "version": "0.1.0",
+  "description": "Discord channel plugin for ColaOS — native message bridging via ctx.deliver()",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsup --watch"
+  },
+  "cola": {
+    "plugin": {
+      "id": "discord",
+      "entry": "./dist/index.js"
+    },
+    "channel": {
+      "name": "Discord",
+      "description": "Bridge Discord channels to ColaOS. Push-based via Discord gateway — no polling, no cron.",
+      "icon": "discord"
+    }
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@marswave/cola-plugin-sdk": "^0.0.4",
+    "discord.js": "^14.16.0"
+  }
+}
