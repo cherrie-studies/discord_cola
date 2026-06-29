@@ -1,21 +1,16 @@
 {
-  "mod": "normal",
-  "chatName": "Discord Integration",
+  "mod": "vibe_cola",
+  "chatName": "Discord Chat",
   "triggerPrefix": "[Discord]",
   "navigation": {
-    "mode": "image",
+    "mode": "coordinate",
     "selectChat": {
-      "method": "locateOnScreen",
-      "image": "chat_sidebar_icon.png",
-      "confidence": 0.8,
-      "clickOffset": { "x": 0, "y": 0 },
-      "description": "Screenshot of the 'Discord Integration' entry in Cola's sidebar. The trigger finds this on screen and clicks it. For coordinate mode, set x/y instead."
+      "coordinates": { "x": 163, "y": 408 },
+      "description": "Center of 'Discord Chat' entry in Cola sidebar"
     },
     "focusInput": {
-      "method": "clickAt",
-      "windowRelative": { "x": 0.5, "y": 0.9 },
-      "coordinates": { "x": null, "y": null },
-      "description": "Click in the chat input area. windowRelative: fraction of window size. coordinates: absolute screen coords (set if windowRelative doesn't work)."
+      "coordinates": { "x": 580, "y": 839 },
+      "description": "Center of chat input area at bottom of Cola window"
     }
   },
   "modSettings": {
