@@ -1,10 +1,13 @@
 /**
- * discord_trigger.mjs — Inject Discord messages into ColaOS via keyboard simulation
+ * discord_trigger.mjs — Inject Discord messages into ColaOS via mouse + keyboard
  *
- * Reads pending.jsonl, activates Cola window, navigates to target chat,
- * pastes the message, and presses Enter.
+ * Reads pending.jsonl, activates Cola window, clicks the target chat
+ * in the sidebar (coordinate mode), then pastes the message and presses Enter.
  *
- * Config: read from trigger_config.json (shared with Python version)
+ * Config: trigger_config.json
+ *   navigation.mode = "coordinate": uses absolute screen coordinates
+ *   navigation.selectChat.coordinates: { x, y } for sidebar chat entry
+ *   navigation.focusInput.coordinates: { x, y } for chat input area
  *
  * Usage:
  *   node discord_trigger.mjs           # run once
@@ -18,29 +21,21 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SCRIPT_DIR = __dirname;
 
 // ── Config ─────────────────────────────────────────────────────────────
 function loadConfig() {
-  // Try script dir, then channels dir
   const paths = [
-    join(SCRIPT_DIR, "trigger_config.json"),
+    join(__dirname, "trigger_config.json"),
     join(homedir(), ".cola", "channels", "discord", "trigger_config.json"),
   ];
   for (const p of paths) {
-    if (existsSync(p)) {
-      return JSON.parse(readFileSync(p, "utf-8"));
-    }
+    if (existsSync(p)) return JSON.parse(readFileSync(p, "utf-8"));
   }
   return {
     mod: "normal",
     chatName: "Discord Integration",
     triggerPrefix: "[Discord]",
-    navigation: {
-      clearSearch: { keys: ["escape"], waitMs: 200 },
-      activateChat: { keys: ["ctrl", "k"] },
-      typeAndSelect: { waitAfterTypeMs: 500 },
-    },
+    navigation: { mode: "coordinate" },
   };
 }
 
@@ -52,89 +47,132 @@ const DONE_FILE = join(homedir(), ".cola", "channels", "discord", "triggered.jso
 const POLL_INTERVAL_MS = 2000;
 
 // ── PowerShell helpers ─────────────────────────────────────────────────
-function runPS(script, timeoutMs = 5000) {
+function ps(script, timeoutMs = 5000) {
   const escaped = script.replace(/"/g, '\\"');
   return execSync(`powershell -NoProfile -NonInteractive -Command "${escaped}"`, {
-    timeout: timeoutMs,
-    windowsHide: true,
+    timeout: timeoutMs, windowsHide: true,
   });
 }
 
 function activateColaWindow() {
-  const ps = `
-    Add-Type @"
-      using System; using System.Runtime.InteropServices;
-      public class W32 {
-        [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-        [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string w);
-        [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int n);
-      }
+  try {
+    ps(`
+      Add-Type @" using System; using System.Runtime.InteropServices;
+        public class W32 {
+          [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+          [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string w);
+          [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+          [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+        }
+        public struct RECT { public int left, top, right, bottom; }
 "@
-    $h = [W32]::FindWindow("Chrome_WidgetWin_1", "Cola")
-    if ($h -eq [IntPtr]::Zero) { exit 1 }
-    [W32]::ShowWindow($h, 9); Start-Sleep -Milliseconds 300
-    [W32]::SetForegroundWindow($h); Start-Sleep -Milliseconds 200
-  `;
-  try { runPS(ps); return true; } catch { return false; }
+      $h = [W32]::FindWindow("Chrome_WidgetWin_1", "Cola")
+      if ($h -eq [IntPtr]::Zero) { exit 1 }
+      [W32]::ShowWindow($h, 9); Start-Sleep -Milliseconds 300
+      [W32]::SetForegroundWindow($h); Start-Sleep -Milliseconds 200
+      $r = New-Object RECT
+      [W32]::GetWindowRect($h, [ref]$r)
+      Write-Output "$($r.left),$($r.top),$($r.right),$($r.bottom)"
+    `);
+    return true;
+  } catch { return false; }
 }
 
-function sendKeysCombo(keys, waitMs = 300) {
-  const keyExpr = keys.map(k => {
-    if (k === "ctrl") return "^";
-    if (k === "shift") return "+";
-    if (k === "alt") return "%";
-    if (k === "escape") return "{ESC}";
-    if (k === "enter") return "{ENTER}";
-    return `{${k.toUpperCase()}}`;
-  }).join("");
+function getColaRect() {
+  try {
+    const out = ps(`
+      Add-Type @" using System; using System.Runtime.InteropServices;
+        public class W32 {
+          [DllImport("user32.dll")] public static extern IntPtr FindWindow(string c, string w);
+          [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+        }
+        public struct RECT { public int left, top, right, bottom; }
+"@
+      $h = [W32]::FindWindow("Chrome_WidgetWin_1", "Cola")
+      $r = New-Object RECT
+      [W32]::GetWindowRect($h, [ref]$r)
+      Write-Output "$($r.left),$($r.top),$($r.right),$($r.bottom)"
+    `);
+    const [l, t, r, b] = out.toString().trim().split(",").map(Number);
+    return { left: l, top: t, right: r, bottom: b };
+  } catch { return null; }
+}
 
-  const ps = `
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.SendKeys]::SendWait("${keyExpr}")
-    Start-Sleep -Milliseconds ${waitMs}
-  `;
-  runPS(ps);
+function moveAndClick(x, y) {
+  ps(`
+    Add-Type @" using System; using System.Runtime.InteropServices;
+      public class M32 {
+        [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+        [DllImport("user32.dll")] public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
+      }
+"@
+    [M32]::SetCursorPos(${x}, ${y})
+    Start-Sleep -Milliseconds 100
+    [M32]::mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
+    Start-Sleep -Milliseconds 50
+    [M32]::mouse_event(0x0004, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
+    Start-Sleep -Milliseconds 200
+  `);
 }
 
 function typeViaClipboard(text) {
   const escaped = text.replace(/"/g, '`"');
-  const ps = `
+  ps(`
     Add-Type -AssemblyName System.Windows.Forms
     [System.Windows.Forms.Clipboard]::SetText("${escaped}")
+    [System.Windows.Forms.SendKeys]::SendWait("^a")
+    Start-Sleep -Milliseconds 100
+    [System.Windows.Forms.SendKeys]::SendWait("{DELETE}")
+    Start-Sleep -Milliseconds 50
     [System.Windows.Forms.SendKeys]::SendWait("^v")
-  `;
-  runPS(ps);
-}
-
-function sendEnter() {
-  const ps = `
-    Add-Type -AssemblyName System.Windows.Forms
+    Start-Sleep -Milliseconds 200
     [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-  `;
-  runPS(ps);
+  `);
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────
-function navigateToChat(chatName) {
-  const nav = config.navigation;
+function selectChat() {
+  const nav = config.navigation || {};
+  const mode = nav.mode || "coordinate";
 
-  // Step 1: Clear any open popups
-  const clear = nav.clearSearch || { keys: ["escape"], waitMs: 200 };
-  sendKeysCombo(clear.keys, clear.waitMs);
+  if (mode === "coordinate") {
+    const coords = nav.selectChat?.coordinates;
+    if (!coords || !coords.x || !coords.y) {
+      console.error("  ✗ No coordinates configured. Set navigation.selectChat.coordinates in trigger_config.json");
+      return false;
+    }
+    console.log(`  🖱 Clicking chat at (${coords.x}, ${coords.y})`);
+    moveAndClick(coords.x, coords.y);
+    return true;
+  }
 
-  // Step 2: Open command palette
-  const activate = nav.activateChat || { keys: ["ctrl", "k"] };
-  sendKeysCombo(activate.keys, 500);
+  console.error(`  ✗ Unsupported navigation mode: ${mode} (Node.js trigger uses 'coordinate' mode)`);
+  return false;
+}
 
-  // Step 3: Type chat name
-  typeViaClipboard(chatName);
+function clickInput() {
+  const nav = config.navigation || {};
+  const focus = nav.focusInput || {};
 
-  // Step 4: Select
-  const select = nav.typeAndSelect || { waitAfterTypeMs: 500 };
-  const wait = new Promise(r => setTimeout(r, select.waitAfterTypeMs || 500));
-  wait.then(() => sendEnter()).then(() => new Promise(r => setTimeout(r, 300)));
+  // Try coordinates first, then window-relative
+  if (focus.coordinates?.x && focus.coordinates?.y) {
+    moveAndClick(focus.coordinates.x, focus.coordinates.y);
+    return;
+  }
 
-  console.log(`  Navigated to chat: ${chatName}`);
+  // Window-relative fallback
+  const rect = getColaRect();
+  if (rect && focus.windowRelative) {
+    const x = rect.left + Math.floor((rect.right - rect.left) * focus.windowRelative.x);
+    const y = rect.top + Math.floor((rect.bottom - rect.top) * focus.windowRelative.y);
+    moveAndClick(x, y);
+    return;
+  }
+
+  // Absolute fallback: center-bottom of screen
+  const screenW = 1920;
+  const screenH = 1080;
+  moveAndClick(Math.floor(screenW / 2), Math.floor(screenH * 0.9));
 }
 
 // ── Message queue ──────────────────────────────────────────────────────
@@ -147,9 +185,7 @@ function readPending() {
   } catch { return []; }
 }
 
-function clearPending() {
-  writeFileSync(PENDING_FILE, "", "utf-8");
-}
+function clearPending() { writeFileSync(PENDING_FILE, "", "utf-8"); }
 
 function archiveProcessed(messages) {
   mkdirSync(dirname(DONE_FILE), { recursive: true });
@@ -159,25 +195,30 @@ function archiveProcessed(messages) {
   }
 }
 
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 // ── Main ───────────────────────────────────────────────────────────────
 async function processOnce() {
   const pending = readPending();
   if (pending.length === 0) return 0;
 
   const mod = config.mod || "normal";
-  const chatName = config.chatName || "Discord Integration";
   const prefix = config.triggerPrefix || "[Discord]";
 
-  console.log(`[${new Date().toISOString()}] Processing ${pending.length} message(s) (mod=${mod}, chat=${chatName})`);
+  console.log(`[${new Date().toISOString()}] Processing ${pending.length} message(s) (mod=${mod})`);
 
   if (!activateColaWindow()) {
     console.error("  Could not activate Cola window.");
     return 0;
   }
 
-  // Navigate to target chat
-  navigateToChat(chatName);
-  await new Promise(r => setTimeout(r, 700));  // wait for nav to settle
+  // Select chat via mouse
+  if (!selectChat()) return 0;
+  await sleep(300);
+
+  // Click input area
+  clickInput();
+  await sleep(200);
 
   for (const msg of pending) {
     const author = msg.author || "Cherrie";
@@ -187,9 +228,7 @@ async function processOnce() {
 
     console.log(`  → Injecting: "${preview}"`);
     typeViaClipboard(text);
-    await new Promise(r => setTimeout(r, 200));
-    sendEnter();
-    await new Promise(r => setTimeout(r, 300));
+    await sleep(300);
     console.log("  ✓ Sent");
   }
 

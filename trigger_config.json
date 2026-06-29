@@ -3,18 +3,19 @@
   "chatName": "Discord Integration",
   "triggerPrefix": "[Discord]",
   "navigation": {
-    "activateChat": {
-      "keys": ["ctrl", "k"],
-      "description": "Opens command palette / chat switcher"
+    "mode": "image",
+    "selectChat": {
+      "method": "locateOnScreen",
+      "image": "chat_sidebar_icon.png",
+      "confidence": 0.8,
+      "clickOffset": { "x": 0, "y": 0 },
+      "description": "Screenshot of the 'Discord Integration' entry in Cola's sidebar. The trigger finds this on screen and clicks it. For coordinate mode, set x/y instead."
     },
-    "clearSearch": {
-      "keys": ["escape"],
-      "waitMs": 200,
-      "description": "Close any open menus/popups before navigating"
-    },
-    "typeAndSelect": {
-      "waitAfterTypeMs": 500,
-      "description": "Type chat name, then wait for results, then Enter to select"
+    "focusInput": {
+      "method": "clickAt",
+      "windowRelative": { "x": 0.5, "y": 0.9 },
+      "coordinates": { "x": null, "y": null },
+      "description": "Click in the chat input area. windowRelative: fraction of window size. coordinates: absolute screen coords (set if windowRelative doesn't work)."
     }
   },
   "modSettings": {
