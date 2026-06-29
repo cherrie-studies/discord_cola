@@ -1,0 +1,30 @@
+{
+  "mod": "normal",
+  "chatName": "Discord Integration",
+  "triggerPrefix": "[Discord]",
+  "navigation": {
+    "activateChat": {
+      "keys": ["ctrl", "k"],
+      "description": "Opens command palette / chat switcher"
+    },
+    "clearSearch": {
+      "keys": ["escape"],
+      "waitMs": 200,
+      "description": "Close any open menus/popups before navigating"
+    },
+    "typeAndSelect": {
+      "waitAfterTypeMs": 500,
+      "description": "Type chat name, then wait for results, then Enter to select"
+    }
+  },
+  "modSettings": {
+    "normal": {
+      "displayName": "Cola",
+      "description": "Default coding-focused mod"
+    },
+    "vibe_cola": {
+      "displayName": "Vibe Cola",
+      "description": "Casual, anime-style companion mod"
+    }
+  }
+}
