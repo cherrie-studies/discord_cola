@@ -7,33 +7,35 @@
     "mode": "coordinate",
     "selectChat": {
       "coordinates": { "x": 163, "y": 408 },
-      "description": "Center of 'Discord Chat' in sidebar"
+      "description": "Sidebar: 'Discord Chat' entry"
     },
     "focusInput": {
       "coordinates": { "x": 580, "y": 839 },
-      "description": "Center of chat input area"
+      "description": "Chat input area"
     },
     "modelSelector": {
       "coordinates": { "x": 766, "y": 878 },
-      "description": "Model selector button showing current model (e.g. 'Lite')"
+      "description": "Model selector button (e.g. 'Lite')"
     },
-    "modelPositions": {
-      "max":    { "x": 500, "y": 450, "description": "Model: Max — calibrate with find_coords.py" },
-      "pro":    { "x": 500, "y": 520, "description": "Model: Pro" },
-      "lite":   { "x": 500, "y": 590, "description": "Model: Lite" },
-      "code":   { "x": 500, "y": 660, "description": "Model: Code" },
-      "glm":    { "x": 500, "y": 730, "description": "Model: GLM 5.2" },
-      "doubao": { "x": 500, "y": 800, "description": "Model: Doubao Seed 2.1 Pro" }
+    "modSelector": {
+      "coordinates": null,
+      "description": "Mod selector at top-left of Cola — CALIBRATE with find_coords.py"
     }
   },
+  "modelPositions": {
+    "max":    { "x": 500, "y": 450, "description": "Model: Max — CALIBRATE" },
+    "pro":    { "x": 500, "y": 520, "description": "Model: Pro — CALIBRATE" },
+    "lite":   { "x": 500, "y": 590, "description": "Model: Lite — CALIBRATE" },
+    "code":   { "x": 500, "y": 660, "description": "Model: Code — CALIBRATE" },
+    "glm":    { "x": 500, "y": 730, "description": "Model: GLM 5.2 — CALIBRATE" },
+    "doubao": { "x": 500, "y": 800, "description": "Model: Doubao Seed — CALIBRATE" }
+  },
+  "switchMod": {
+    "cola":      { "x": null, "y": null, "description": "Switch Mod modal: Cola card — CALIBRATE" },
+    "vibe_cola": { "x": null, "y": null, "description": "Switch Mod modal: Vibe Cola card — CALIBRATE" }
+  },
   "modSettings": {
-    "normal": {
-      "displayName": "Cola",
-      "description": "Default coding-focused mod"
-    },
-    "vibe_cola": {
-      "displayName": "Vibe Cola",
-      "description": "Casual, anime-style companion mod"
-    }
+    "normal":    { "displayName": "Cola",      "description": "Coding-focused, technical" },
+    "vibe_cola": { "displayName": "Vibe Cola", "description": "Casual, anime-style companion" }
   }
 }

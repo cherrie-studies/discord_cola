@@ -172,6 +172,51 @@ export default defineChannel<PluginState>({
           return;
         }
 
+        // /mod show — list mods
+        if (cmd === "/mod show" || cmd === "/mod list") {
+          const channel = message.channel as TextChannel;
+          await channel.send({
+            content: [
+              "**Available mods**",
+              "",
+              "• `normal` — Cola (coding-focused, technical)",
+              "• `vibe_cola` — Vibe Cola (casual, anime-style companion)",
+              "",
+              "Change: `/mod change <code>` (e.g. `/mod change vibe_cola`)",
+            ].join("\n"),
+          });
+          ctx.logger.info(`→ /mod show`);
+          return;
+        }
+
+        // /mod change <code>
+        const modMatch = cmd.match(/^\/mod\s+change\s+(\w+)/i);
+        if (modMatch) {
+          const code = modMatch[1].toLowerCase();
+          const validMods: Record<string, string> = {
+            normal: "normal", cola: "normal",
+            vibe: "vibe_cola", vibe_cola: "vibe_cola", vibecola: "vibe_cola",
+          };
+          const target = validMods[code];
+          if (!target) {
+            const channel = message.channel as TextChannel;
+            await channel.send(`❌ Unknown mod: \`${code}\`. Use \`/mod show\` to see available mods.`);
+            return;
+          }
+          const cmdFile = path.join(os.homedir(), ".cola", "channels", "discord", "commands.jsonl");
+          fs.mkdirSync(path.dirname(cmdFile), { recursive: true });
+          fs.appendFileSync(cmdFile, JSON.stringify({
+            command: "switch_mod",
+            target: target,
+            channelId: message.channel.id,
+            timestamp: new Date().toISOString(),
+          }) + "\n", "utf-8");
+          const channel = message.channel as TextChannel;
+          await channel.send(`🔄 Switching mod to **${target}**...`);
+          ctx.logger.info(`→ /mod change ${target}`);
+          return;
+        }
+
         // Unknown command — fall through to normal message handling
       };
 
@@ -180,7 +225,7 @@ export default defineChannel<PluginState>({
         if (allowedIds.size > 0 && !allowedIds.has(message.channel.id)) return;
 
         // Intercept slash commands
-        if (message.content.startsWith("/model")) {
+        if (message.content.startsWith("/model") || message.content.startsWith("/mod")) {
           await handleCommand(message);
           return;
         }
