@@ -122,9 +122,68 @@ export default defineChannel<PluginState>({
         }
       });
 
+      // ── Slash command handler ─────────────────────────────────
+      const handleCommand = async (message: Message) => {
+        const cmd = message.content.trim();
+
+        // /model show — list available models
+        if (cmd === "/model show" || cmd === "/model list") {
+          const channel = message.channel as TextChannel;
+          await channel.send({
+            content: [
+              "**Available models**",
+              "",
+              "• `max` — Best experience, emotionally & intellectually sharp",
+              "• `pro` — Near-flagship at a friendlier price",
+              "• `lite` — Entry-level (currently selected)",
+              "• `code` — Best coding model",
+              "• `glm` — Pro-level performance, best value",
+              "• `doubao` — Flagship multimodal (Beta)",
+              "",
+              "Change: `/model change <code>` (e.g. `/model change pro`)",
+            ].join("\n"),
+          });
+          ctx.logger.info(`→ /model show`);
+          return;
+        }
+
+        // /model change <code>
+        const changeMatch = cmd.match(/^\/model\s+change\s+(\w+)/i);
+        if (changeMatch) {
+          const code = changeMatch[1].toLowerCase();
+          const validModels = ["max", "pro", "lite", "code", "glm", "doubao"];
+          if (!validModels.includes(code)) {
+            const channel = message.channel as TextChannel;
+            await channel.send(`❌ Unknown model: \`${code}\`. Use \`/model show\` to see available models.`);
+            return;
+          }
+          // Write command for trigger to execute via mouse clicks
+          const cmdFile = path.join(os.homedir(), ".cola", "channels", "discord", "commands.jsonl");
+          fs.mkdirSync(path.dirname(cmdFile), { recursive: true });
+          fs.appendFileSync(cmdFile, JSON.stringify({
+            command: "change_model",
+            target: code,
+            channelId: message.channel.id,
+            timestamp: new Date().toISOString(),
+          }) + "\n", "utf-8");
+          const channel = message.channel as TextChannel;
+          await channel.send(`🔄 Switching model to **${code}**...`);
+          ctx.logger.info(`→ /model change ${code}`);
+          return;
+        }
+
+        // Unknown command — fall through to normal message handling
+      };
+
       client.on(Events.MessageCreate, async (message: Message) => {
         if (message.author.bot) return;
         if (allowedIds.size > 0 && !allowedIds.has(message.channel.id)) return;
+
+        // Intercept slash commands
+        if (message.content.startsWith("/model")) {
+          await handleCommand(message);
+          return;
+        }
 
         const guildName = message.guild?.name ?? "DM";
         const channelName =

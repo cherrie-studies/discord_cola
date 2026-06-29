@@ -2,15 +2,28 @@
   "mod": "vibe_cola",
   "chatName": "Discord Chat",
   "triggerPrefix": "[Discord]",
+  "pollIntervalMs": 2000,
   "navigation": {
     "mode": "coordinate",
     "selectChat": {
       "coordinates": { "x": 163, "y": 408 },
-      "description": "Center of 'Discord Chat' entry in Cola sidebar"
+      "description": "Center of 'Discord Chat' in sidebar"
     },
     "focusInput": {
       "coordinates": { "x": 580, "y": 839 },
-      "description": "Center of chat input area at bottom of Cola window"
+      "description": "Center of chat input area"
+    },
+    "modelSelector": {
+      "coordinates": { "x": 766, "y": 878 },
+      "description": "Model selector button showing current model (e.g. 'Lite')"
+    },
+    "modelPositions": {
+      "max":    { "x": 500, "y": 450, "description": "Model: Max — calibrate with find_coords.py" },
+      "pro":    { "x": 500, "y": 520, "description": "Model: Pro" },
+      "lite":   { "x": 500, "y": 590, "description": "Model: Lite" },
+      "code":   { "x": 500, "y": 660, "description": "Model: Code" },
+      "glm":    { "x": 500, "y": 730, "description": "Model: GLM 5.2" },
+      "doubao": { "x": 500, "y": 800, "description": "Model: Doubao Seed 2.1 Pro" }
     }
   },
   "modSettings": {
