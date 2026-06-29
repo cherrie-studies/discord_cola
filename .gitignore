@@ -18,3 +18,9 @@ channels/
 # OS
 .DS_Store
 Thumbs.db
+
+legacy/inbox/
+legacy/outbox/
+_reference_screen.png
+chat_sidebar_icon.png
+
